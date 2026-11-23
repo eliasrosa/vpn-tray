@@ -163,6 +163,15 @@ def test_ver_log_abre_janela_com_linhas(app):
     assert "work" not in app.log_windows
 
 
+def test_log_abre_mesmo_sem_leitor_de_svg(app, monkeypatch):
+    """Sem librsvg2-common o GdkPixbuf não lê SVG: a janela tem que abrir igual."""
+    def boom(self, path):
+        raise vt.GLib.Error("Couldn't recognize the image file format")
+    monkeypatch.setattr(vt.LogWindow, "set_icon_from_file", boom)
+    win = app.show_log("work")
+    assert win.get_visible()
+
+
 def test_log_continua_recebendo_linhas(app):
     lines = []
     app.backend.follow_log = lambda name, cb: (lines.append(cb), vt.FakeHandle())[1]

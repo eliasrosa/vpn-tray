@@ -325,7 +325,10 @@ class LogWindow(Gtk.Window):
     def __init__(self, backend, name):
         super().__init__(title=f"VPN Tray — log de {name}")
         self.set_default_size(900, 480)
-        self.set_icon_from_file(icon(ON)) if os.path.exists(icon(ON)) else None
+        try:
+            self.set_icon_from_file(icon(ON))
+        except GLib.Error:
+            pass  # sem leitor de SVG (librsvg2-common): a janela abre sem ícone
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin=8)
         self.add(box)
 
