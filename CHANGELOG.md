@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/eliasrosa/vpn-tray/compare/v1.0.0...v1.0.1) (2026-11-23)
+
+### Correções
+
+* **log:** abre a janela de log mesmo sem leitor de SVG ([c03a80d](https://github.com/eliasrosa/vpn-tray/commit/c03a80dd377682616bc37553e6347b53cc2d3198))
+
 Todas as mudanças relevantes deste projeto. Seguimos o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 A partir da 1.0.0, este arquivo é atualizado automaticamente pelo semantic-release a partir dos commits.
 
