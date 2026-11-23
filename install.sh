@@ -24,7 +24,7 @@ sudo systemctl daemon-reload
 # Configs que já existem em /etc/openfortivpn/<nome>.conf: cria o <nome>.args
 # (sem segredo) para o app enxergar. Com "password" no arquivo = usuário/senha;
 # sem = SAML. O "config" padrão do pacote é ignorado.
-for conf in $(sudo find /etc/openfortivpn -maxdepth 1 -name '*.conf' -printf '%f\n' 2>/dev/null); do
+while IFS= read -r conf; do
   name="${conf%.conf}"
   [[ "$name" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ ]] || continue
   [ "$name" = "config" ] && continue
@@ -39,14 +39,13 @@ for conf in $(sudo find /etc/openfortivpn -maxdepth 1 -name '*.conf' -printf '%f
       | sudo install -m644 -o root -g root /dev/stdin "/etc/openfortivpn/$name.args"
     echo "    perfil importado: $name ($auth)"
   fi
-done
+done < <(sudo find /etc/openfortivpn -maxdepth 1 -name '*.conf' -printf '%f\n' 2>/dev/null)
 
 echo "==> Parte do usuário"
-chmod +x "$HERE/vpn_tray.py"
 mkdir -p ~/.local/bin ~/.local/share/applications ~/.config/autostart
-ln -sf "$HERE/vpn_tray.py" ~/.local/bin/vpn-tray
-chmod +x "$HERE/vpnctl"
-ln -sf "$HERE/vpnctl" ~/.local/bin/vpnctl
+chmod +x "$HERE/bin/vpn-tray" "$HERE/bin/vpnctl"
+ln -sfn "$HERE/bin/vpn-tray" ~/.local/bin/vpn-tray
+ln -sfn "$HERE/bin/vpnctl" ~/.local/bin/vpnctl
 DESKTOP="[Desktop Entry]
 Type=Application
 Name=VPN Tray
@@ -67,7 +66,7 @@ if [ ! -f "$CFG" ] && [ "${#ARGS_FILES[@]}" -eq 1 ]; then
   mkdir -p ~/.config/vpn-tray && printf '{"default": "%s"}\n' "$only" > "$CFG"
 fi
 
-pkill -f "\.local/bin/vpn-tray$|vpn_tray.py$" 2>/dev/null || true
+pkill -f "\.local/bin/vpn-tray$|bin/vpn-tray$|vpn_tray.py$" 2>/dev/null || true
 nohup "$HOME/.local/bin/vpn-tray" >/dev/null 2>&1 &
 
 if [ "${1:-}" != "--no-agents" ]; then

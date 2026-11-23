@@ -1,0 +1,40 @@
+name: Bug
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Não cole** senhas, hosts/IPs internos, certificados ou o conteúdo de `/etc/openfortivpn/*.conf`.
+        Troque por valores fictícios (ex.: `vpn.example.com`).
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: E o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: "1. Menu → Conectar work\n2. …"
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Saída de `vpnctl status` e `vpnctl --version`
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log (`vpnctl logs -n 60`), com dados sensíveis trocados
+      render: text
+  - type: input
+    id: env
+    attributes:
+      label: Distro, ambiente gráfico e versão do openfortivpn
+      placeholder: "Linux Mint 22 / Cinnamon / openfortivpn 1.24"
+    validations:
+      required: true

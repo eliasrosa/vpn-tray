@@ -8,11 +8,34 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: ruff (lint + formatação)
+        run: |
+          pip install ruff==0.16.8
+          ruff check --output-format=github .
+          ruff format --check .
+      - name: shellcheck
+        run: shellcheck install.sh uninstall.sh
+
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Dependências (GTK, XApp, notificações, pytest)
         run: |
           sudo apt-get update
@@ -20,34 +43,30 @@ jobs:
             python3-gi gir1.2-gtk-3.0 gir1.2-notify-0.7 gir1.2-xapp-1.0 \
             python3-pytest xvfb dbus-x11 at-spi2-core
       - name: Testes (com tela virtual)
-        run: xvfb-run -a dbus-run-session -- python3 -m pytest -q tests
-      - name: Sintaxe dos scripts
-        run: bash -n install.sh && bash -n uninstall.sh
+        run: xvfb-run -a dbus-run-session -- python3 -m pytest -ra
 
   release:
-    needs: test
+    needs: [lint, test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    concurrency:
+      group: release
+      cancel-in-progress: false
     permissions:
       contents: write
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >
-          npx --yes
-          -p semantic-release@24.2.0
-          -p @semantic-release/changelog@6.0.3
-          -p @semantic-release/git@10.0.1
-          -p @semantic-release/exec@6.0.3
-          -p conventional-changelog-conventionalcommits@8.0.0
-          semantic-release
+        run: npx semantic-release

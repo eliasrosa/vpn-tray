@@ -1,0 +1,21 @@
+name: Ideia / melhoria
+description: Sugira algo novo
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isso resolve?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Como você imagina a solução?
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Escopo
+      options:
+        - label: É sobre a VPN (o VPN Tray não testa bancos/serviços — veja docs/cli.md)
+          required: true
