@@ -138,8 +138,7 @@ def cmd_import(c: Container, a) -> int:
     err = c.profiles.validate(profile)
     if err:
         raise VpnTrayError(f"Não dá para importar: {err} (use --name para escolher outro nome)")
-    shown = {**profile.to_dict(), "password": "•••" if profile.password else ""}
-    print("Importando:", json.dumps(shown, ensure_ascii=False))
+    print("Importando:", json.dumps(profile.public_dict(), ensure_ascii=False))
     if ignored:
         print("Ignorando chaves não suportadas:", ", ".join(ignored))
     if a.dry_run:

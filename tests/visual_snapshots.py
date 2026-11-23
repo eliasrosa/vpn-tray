@@ -72,7 +72,7 @@ def snap_menu(app, name):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for st in State:
+    for st in (State.OFF, State.CONNECTING, State.ON, State.ERROR):
         GdkPixbuf.Pixbuf.new_from_file_at_size(icon(st), 48, 48).savev(
             os.path.join(OUT, f"icon-{st.value}.png"), "png", [], []
         )

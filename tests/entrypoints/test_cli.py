@@ -65,7 +65,8 @@ def test_import_dry_run(env, tmp_path):
     f.write_text("host = vpn.example.com:10443\nusername = ana\npassword = s3gr3d0\nset-routes = 1\n")
     code, out, _ = vpnctl(env, "import", str(f), "--dry-run")
     assert code == 0 and '"name": "empresa"' in out and '"port": 10443' in out
-    assert "s3gr3d0" not in out, "não mostra a senha"
+    assert "s3gr3d0" not in out and '"password":' not in out, "não mostra a senha"
+    assert '"password_set": true' in out
     assert "Ignorando chaves não suportadas: set-routes" in out
 
 

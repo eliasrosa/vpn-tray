@@ -147,3 +147,10 @@ def test_log_session_relida_nao_dispara():
     s.feed("INFO:   Authenticate at 'https://vpn/saml'")
     s.feed("INFO:   Tunnel is up and running.")
     assert s.info.tunnel_up and set(events) == {"changed"}
+
+
+def test_public_dict_nunca_tem_a_senha():
+    p = NewProfile("w", "vpn.example.com", auth="password", username="alice", password="s3nh4")
+    shown = p.public_dict()
+    assert "password" not in shown and shown["password_set"] is True
+    assert "s3nh4" not in repr(shown)

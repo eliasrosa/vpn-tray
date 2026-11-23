@@ -347,7 +347,8 @@ class VpnTrayApp(Gtk.Application):
         try:
             Notify.Notification.new(title, body, icon(self.state)).show()
         except GLib.Error:
-            pass
+            # Sem servidor de notificações: o aviso fica só em self.notifications.
+            return
 
     # ------------------------------------------------------ adicionar VPN
     def build_add_dialog(self) -> AddVpnDialog:

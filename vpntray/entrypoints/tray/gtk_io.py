@@ -44,7 +44,8 @@ class LineReader:
         try:
             self.proc.force_exit()
         except GLib.Error:
-            pass
+            # O processo já tinha terminado: nada a encerrar.
+            return
 
 
 class JournalctlFollower:
@@ -71,7 +72,7 @@ class JournalctlFollower:
         )
 
 
-Done = Callable[[object, BaseException | None], None]
+Done = Callable[[object, Exception | None], None]
 
 
 def thread_runner(fn: Callable[[], object], done: Done) -> None:
@@ -80,7 +81,7 @@ def thread_runner(fn: Callable[[], object], done: Done) -> None:
     def work():
         try:
             result, error = fn(), None
-        except BaseException as e:  # noqa: BLE001 — repassado para a UI
+        except Exception as e:  # noqa: BLE001 — repassado para a UI
             result, error = None, e
         GLib.idle_add(lambda: (done(result, error), False)[1])
 
@@ -91,6 +92,6 @@ def inline_runner(fn: Callable[[], object], done: Done) -> None:
     """Versão síncrona (testes e modo demo)."""
     try:
         result, error = fn(), None
-    except BaseException as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 — repassado para quem chamou
         result, error = None, e
     done(result, error)

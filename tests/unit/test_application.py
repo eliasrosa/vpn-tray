@@ -26,7 +26,7 @@ def test_status_aguardando_login(container, system):
     system.tick(), system.tick()
     p = container.status.get()["profiles"]["work"]
     assert p["state"] == "connecting" and p["waiting_browser_login"]
-    assert p["login_url"].startswith("https://vpn.work.example")
+    assert p["login_url"] == "https://vpn.work.example/remote/saml/start?redirect=1"
 
 
 def test_status_vpn_fora_do_app(container, system):

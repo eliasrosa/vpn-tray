@@ -123,6 +123,19 @@ class NewProfile:
     realm: str = ""
     trusted_cert: str = ""
 
+    def public_dict(self) -> dict:
+        """Para mostrar ao usuário/logar: NUNCA inclui a senha, só se ela existe."""
+        return {
+            "name": self.name,
+            "host": self.host,
+            "port": self.port,
+            "auth": self.auth,
+            "username": self.username,
+            "password_set": bool(self.password),
+            "realm": self.realm,
+            "trusted_cert": self.trusted_cert,
+        }
+
     def to_dict(self) -> dict:
         return {
             "name": self.name,
