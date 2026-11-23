@@ -1,0 +1,13 @@
+[Unit]
+Description=VPN Tray: openfortivpn (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/openfortivpn/%i.args
+ExecStart=@OPENFORTIVPN@ -c /etc/openfortivpn/%i.conf $EXTRA_ARGS
+Restart=no
+OOMScoreAdjust=-100
+KillSignal=SIGINT
+TimeoutStopSec=10

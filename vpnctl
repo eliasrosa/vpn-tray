@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""vpnctl — controla as VPNs do VPN Tray pelo terminal (e por agentes).
+
+  vpnctl status [--json]                 estado de cada VPN e política
+  vpnctl connect [NOME] [--wait 120]     conecta (padrão se omitir) e espera subir
+  vpnctl disconnect [NOME]               desconecta (a ativa se omitir)
+  vpnctl logs [NOME] [-n 80] [-f]        log do serviço
+  vpnctl import ARQUIVO [--name N]       converte um .conf do openfortivpn em perfil
+  vpnctl policy [show]                   mostra a política de segurança
+  vpnctl policy require-password on|off  pedir senha ao conectar (pede senha p/ mudar)
+  vpnctl agents [show|allow-connect on|off|allow-disconnect on|off|enabled on|off]
+  vpnctl mcp                             servidor MCP (stdio) para Claude/Kiro/etc.
+  vpnctl setup-agents [--claude] [--kiro] [--dry-run]   registra o MCP e a skill
+
+Escopo: só VPN. Testar banco/serviço é com o MCP/ferramenta de cada um.
+Códigos de saída: 0 ok · 1 erro · 2 uso · 4 VPN não subiu.
+"""
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, HERE)
+import vpnlib as v  # noqa: E402
+
+
+def out(data, as_json, text):
+    if as_json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        print(text)
+
+
+def fmt_status(st):
+    lines = []
+    if not st["profiles"]:
+        lines.append("Nenhuma VPN cadastrada (adicione pelo ícone ou: vpnctl import ARQUIVO).")
+    for name, p in st["profiles"].items():
+        star = " ★" if name == st["default"] else ""
+        extra = ""
+        if p["waiting_browser_login"]:
+            extra = "  → aguardando login no navegador"
+        elif p["last_error"]:
+            extra = f"  → {p['last_error']}"
+        if p["untrusted_cert"]:
+            extra += "  (certificado não confiável: confie pelo menu do ícone)"
+        lines.append(f"{v.DOT[p['state']]} {name}{star}: {p['label']}"
+                     f" [{p['auth']}{' · ' + p['host'] if p['host'] else ''}]{extra}")
+    if st["external_openfortivpn"]:
+        lines.append("● openfortivpn rodando fora do VPN Tray (ex.: um alias/script próprio)")
+    if st["ppp"]:
+        lines.append("Interfaces: " + ", ".join(st["ppp"]))
+    pol = "pede senha ao conectar" if st["policy"]["require_password_connect"] \
+        else "conecta sem pedir senha"
+    ag = st["agents"]
+    lines.append(f"Segurança: {pol} · agentes: "
+                 f"{'ligados' if ag.get('enabled') else 'desligados'}, "
+                 f"conectar={'sim' if ag.get('allow_connect') else 'não'}, "
+                 f"desconectar={'sim' if ag.get('allow_disconnect') else 'não'}")
+    return "\n".join(lines)
+
+
+def pick_profile(name, st, want_active=False):
+    if name:
+        if name not in st["profiles"]:
+            sys.exit(f"VPN “{name}” não existe. Cadastradas: {', '.join(st['profiles']) or '—'}")
+        return name
+    if want_active:
+        for n, p in st["profiles"].items():
+            if p["state"] in (v.ON, v.CONNECTING):
+                return n
+        sys.exit("Nenhuma VPN ativa.")
+    if not st["default"]:
+        sys.exit("Nenhuma VPN cadastrada.")
+    return st["default"]
+
+
+# ----------------------------------------------------------------- comandos
+def cmd_status(a):
+    st = v.status()
+    out(st, a.json, fmt_status(st))
+
+
+def cmd_connect(a):
+    st = v.status()
+    name = pick_profile(a.name, st)
+    p = st["profiles"][name]
+    if p["state"] == v.ON:
+        out({"profile": name, "state": v.ON, "already": True}, a.json, f"{name} já está conectada.")
+        return 0
+    for other, op in st["profiles"].items():
+        if other != name and op["state"] in (v.ON, v.CONNECTING):
+            v.systemctl("stop", other)
+    if st["policy"]["require_password_connect"] and not a.json:
+        print("A política pede senha: confirme na caixinha que vai abrir…", file=sys.stderr)
+    code, _o, err = v.systemctl("start", name, timeout=180)
+    if code != 0:
+        msg = err or "falhou"
+        if "authentic" in msg.lower() or "autentica" in msg.lower():
+            msg = "senha não confirmada (política “pedir senha ao conectar”)"
+        out({"profile": name, "ok": False, "error": msg}, a.json, f"Não conectou: {msg}")
+        return 4
+    if not a.wait:
+        out({"profile": name, "started": True}, a.json, f"{name}: iniciando…")
+        return 0
+
+    tray = v.tray_running()
+
+    def on_url(url):
+        if a.no_browser:
+            print(f"Faça o login em: {url}", file=sys.stderr)
+        elif not tray:  # com o ícone rodando, ele mesmo abre o navegador
+            v.open_browser(url)
+        if not a.json:
+            print("Login SAML: termine no navegador…", file=sys.stderr)
+
+    final = v.wait_for(name, timeout=a.wait, on_login_url=on_url)
+    ok = final.get("state") == v.ON
+    out({"profile": name, "ok": ok, **final}, a.json,
+        f"{name}: {final.get('label', '?')}" + (f" — {final['last_error']}"
+                                                  if final.get("last_error") else ""))
+    return 0 if ok else 4
+
+
+def cmd_disconnect(a):
+    st = v.status()
+    name = pick_profile(a.name, st, want_active=True)
+    code, _o, err = v.systemctl("stop", name)
+    out({"profile": name, "ok": code == 0, "error": err or None}, a.json,
+        f"{name}: desconectada." if code == 0 else f"Falhou: {err}")
+    return 0 if code == 0 else 1
+
+
+def cmd_logs(a):
+    st = v.status()
+    name = pick_profile(a.name, st)
+    if a.follow:
+        os.execvp("journalctl", ["journalctl", "-u", v.unit_of(name), "-n", str(a.n), "-f"])
+    print(v.logs(name, a.n))
+
+
+def cmd_import(a):
+    try:
+        with open(a.file) as f:
+            text = f.read()
+    except PermissionError:
+        code, text, err = v.run(["pkexec", "cat", a.file], timeout=120)
+        if code != 0:
+            sys.exit(f"Sem permissão para ler {a.file}: {err}")
+    base = os.path.basename(a.file).rsplit(".", 1)[0].lower()
+    data, ignored = v.parse_openfortivpn_conf(text, a.name or (base if base != "config" else ""))
+    err = v.validate_new_profile(data, v.list_profiles())
+    if err:
+        sys.exit(f"Não dá para importar: {err} (use --name para escolher outro nome)")
+    shown = {**data, "password": "•••" if data["password"] else ""}
+    print("Importando:", json.dumps(shown, ensure_ascii=False))
+    if ignored:
+        print("Ignorando chaves não suportadas:", ", ".join(ignored))
+    if a.dry_run:
+        return 0
+    code, o, err = v.helper(["add"], json.dumps(data))
+    if code != 0:
+        sys.exit(err or "falhou")
+    if a.default:
+        s = v.load_settings()
+        s["default"] = data["name"]
+        v.save_settings(s)
+    print(o.strip() or "ok")
+
+
+def cmd_policy(a):
+    if a.action in (None, "show"):
+        p = v.load_policy()
+        out(p, a.json, "Pedir senha ao conectar: " + ("SIM" if p["require_password_connect"]
+                                                      else "não"))
+        return 0
+    if a.action == "require-password" and a.value in ("on", "off"):
+        code, o, err = v.helper(["policy", "require-password", a.value])
+        print(o.strip() if code == 0 else f"Falhou: {err}")
+        return 0 if code == 0 else 1
+    sys.exit("uso: vpnctl policy [show] | vpnctl policy require-password on|off")
+
+
+def cmd_agents(a):
+    s = v.load_settings()
+    ag = s.setdefault("agents", {})
+    keys = {"enabled": "enabled", "allow-connect": "allow_connect",
+            "allow-disconnect": "allow_disconnect"}
+    if a.action in (None, "show"):
+        out(ag, a.json, "\n".join(f"{k}: {'on' if ag.get(k) else 'off'}" for k in
+                                  ("enabled", "allow_connect", "allow_disconnect")))
+        return 0
+    if a.action in keys and a.value in ("on", "off"):
+        ag[keys[a.action]] = a.value == "on"
+        v.save_settings(s)
+        print(f"{keys[a.action]} = {a.value}")
+        return 0
+    sys.exit("uso: vpnctl agents [show] | enabled|allow-connect|allow-disconnect on|off")
+
+
+def cmd_mcp(_a):
+    import vpn_mcp
+    vpn_mcp.serve()
+
+
+def cmd_setup_agents(a):
+    import agent_setup
+    return agent_setup.main(claude=a.claude, kiro=a.kiro, dry_run=a.dry_run,
+                            remove=a.remove)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="vpnctl", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--version", action="version", version=f"vpnctl {v.__version__}")
+    sub = ap.add_subparsers(dest="cmd")
+
+    def add(name, fn, **kw):
+        p = sub.add_parser(name, **kw)
+        p.add_argument("--json", action="store_true", help="saída em JSON")
+        p.set_defaults(fn=fn)
+        return p
+
+    add("status", cmd_status, help="estado das VPNs")
+    p = add("connect", cmd_connect, help="conecta")
+    p.add_argument("name", nargs="?")
+    p.add_argument("--wait", type=int, default=120, help="segundos esperando subir (0 = não espera)")
+    p.add_argument("--no-browser", action="store_true", help="só imprime a URL do login")
+    p = add("disconnect", cmd_disconnect, help="desconecta")
+    p.add_argument("name", nargs="?")
+    p = add("logs", cmd_logs, help="log do serviço")
+    p.add_argument("name", nargs="?")
+    p.add_argument("-n", type=int, default=80)
+    p.add_argument("-f", "--follow", action="store_true")
+    p = add("import", cmd_import, help="importa .conf do openfortivpn")
+    p.add_argument("file")
+    p.add_argument("--name")
+    p.add_argument("--default", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p = add("policy", cmd_policy, help="política de segurança")
+    p.add_argument("action", nargs="?")
+    p.add_argument("value", nargs="?")
+    p = add("agents", cmd_agents, help="o que agentes podem fazer")
+    p.add_argument("action", nargs="?")
+    p.add_argument("value", nargs="?")
+    add("mcp", cmd_mcp, help="servidor MCP (stdio)")
+    p = add("setup-agents", cmd_setup_agents, help="registra MCP + skill no Claude/Kiro")
+    p.add_argument("--claude", action="store_true")
+    p.add_argument("--kiro", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--remove", action="store_true")
+
+    a = ap.parse_args(argv)
+    if not getattr(a, "fn", None):
+        ap.print_help()
+        return 2
+    return a.fn(a) or 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

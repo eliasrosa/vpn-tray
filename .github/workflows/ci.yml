@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependências (GTK, XApp, notificações, pytest)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi gir1.2-gtk-3.0 gir1.2-notify-0.7 gir1.2-xapp-1.0 \
+            python3-pytest xvfb dbus-x11 at-spi2-core
+      - name: Testes (com tela virtual)
+        run: xvfb-run -a dbus-run-session -- python3 -m pytest -q tests
+      - name: Sintaxe dos scripts
+        run: bash -n install.sh && bash -n uninstall.sh
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          npx --yes
+          -p semantic-release@24.2.0
+          -p @semantic-release/changelog@6.0.3
+          -p @semantic-release/git@10.0.1
+          -p @semantic-release/exec@6.0.3
+          -p conventional-changelog-conventionalcommits@8.0.0
+          semantic-release

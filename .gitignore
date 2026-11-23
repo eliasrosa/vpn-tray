@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# prints gerados localmente pelo teste visual (podem conter a sua tela)
+tests/snapshots/
+*.bak
+*.bak-*

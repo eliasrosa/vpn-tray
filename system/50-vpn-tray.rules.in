@@ -1,0 +1,19 @@
+// VPN Tray — gerado por vpn-tray-helper (não edite à mão: use `vpnctl policy`).
+// Permite que @USER@ ligue/desligue vpn-tray@*.service.
+// Conectar: @CONNECT_MODE@. Desconectar: sempre sem senha.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "@USER@" && subject.local && subject.active) {
+        var unit = action.lookup("unit") || "";
+        var verb = action.lookup("verb") || "";
+        if (!/^vpn-tray@[a-z0-9][a-z0-9_-]{0,31}\.service$/.test(unit)) {
+            return;
+        }
+        if (verb == "stop") {
+            return polkit.Result.YES;
+        }
+        if (verb == "start" || verb == "restart") {
+            return @CONNECT_RESULT@;
+        }
+    }
+});
