@@ -1,0 +1,63 @@
+[project]
+name = "vpn-tray"
+description = "Ícone na bandeja, CLI e servidor MCP para o openfortivpn no Linux."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dynamic = ["version"]
+authors = [{ name = "Elias da Rosa" }]
+classifiers = [
+  "Environment :: X11 Applications :: GTK",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Networking",
+]
+# PyGObject (python3-gi) vem do sistema: veja docs/installation.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+vpnctl = "vpntray.entrypoints.cli:main"
+
+[project.gui-scripts]
+vpn-tray = "vpntray.entrypoints.tray.app:main"
+
+[project.urls]
+Homepage = "https://github.com/eliasrosa/vpn-tray"
+Issues = "https://github.com/eliasrosa/vpn-tray/issues"
+Changelog = "https://github.com/eliasrosa/vpn-tray/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.setuptools.packages.find]
+include = ["vpntray*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-include = ["bin/vpnctl", "bin/vpn-tray", "system/vpn-tray-helper"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "S", "BLE"]
+ignore = [
+  "RUF001", "RUF002", "RUF003",  # aspas/travessões tipográficos do português
+  "S603", "S607",                # subprocess sem shell, com argv fixo: é o objetivo
+  "SIM105",                      # try/except/pass é mais legível aqui
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108", "S105", "S106", "B011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["vpntray"]

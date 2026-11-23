@@ -12,6 +12,7 @@ Uso:
 Só grava em /etc/openfortivpn/NAME.conf (0600) e NAME.args (0644), com um
 conjunto fechado de chaves — nada de pppd-plugin, user-agent arbitrário etc.
 """
+
 import json
 import os
 import pwd
@@ -63,11 +64,12 @@ def cmd_add():
     host = clean(data.get("host"), "host")
     if not HOST_RE.match(host):
         die("host inválido")
+    port = data.get("port")
     try:
-        port = data.get("port")
         port = 443 if port in (None, "") else int(port)
-        assert 0 < port < 65536
-    except Exception:
+    except (TypeError, ValueError):
+        die("porta inválida")
+    if not 0 < port < 65536:
         die("porta inválida")
     auth = clean(data.get("auth") or "saml", "auth")
     if auth not in ("saml", "password"):
@@ -156,11 +158,11 @@ def caller_user(policy):
 def render_rule(template, user, require_password):
     if not USER_RE.match(user or ""):
         die("usuário inválido para a regra do polkit")
-    return (template.replace("@USER@", user)
-            .replace("@CONNECT_RESULT@", "polkit.Result.AUTH_SELF" if require_password
-                     else "polkit.Result.YES")
-            .replace("@CONNECT_MODE@", "pede a senha do usuário" if require_password
-                     else "sem senha"))
+    return (
+        template.replace("@USER@", user)
+        .replace("@CONNECT_RESULT@", "polkit.Result.AUTH_SELF" if require_password else "polkit.Result.YES")
+        .replace("@CONNECT_MODE@", "pede a senha do usuário" if require_password else "sem senha")
+    )
 
 
 def cmd_policy(args):
@@ -178,8 +180,9 @@ def cmd_policy(args):
     os.makedirs(POLICY_DIR, mode=0o755, exist_ok=True)
     write_file(POLICY_FILE, json.dumps(policy, indent=2) + "\n", 0o644)
     write_file(RULE_FILE, rule, 0o644)
-    print("conectar agora pede senha" if policy.get("require_password_connect")
-          else "conectar não pede senha")
+    print(
+        "conectar agora pede senha" if policy.get("require_password_connect") else "conectar não pede senha"
+    )
 
 
 def main():

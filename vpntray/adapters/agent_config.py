@@ -1,8 +1,10 @@
-"""Registra o MCP `vpn-tray` e a skill nos agentes (Claude Code e Kiro).
+"""Adaptador de configuração de agentes: registra o MCP `vpn-tray` e a skill
+no Claude Code e no Kiro.
 
 Chamado por `vpnctl setup-agents [--claude] [--kiro] [--dry-run] [--remove]`.
 Sem flags, faz os dois. Sempre guarda backup antes de mexer em JSON.
 """
+
 import glob
 import json
 import os
@@ -10,9 +12,9 @@ import shutil
 import subprocess
 import time
 
-HERE = os.path.dirname(os.path.realpath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 VPNCTL = os.path.expanduser("~/.local/bin/vpnctl")
-SKILL_SRC = os.path.join(HERE, "agent", "SKILL.md")
+SKILL_SRC = os.path.join(ROOT, "agent", "SKILL.md")
 SERVER = "vpn-tray"
 READ_ONLY = ["vpn_status", "vpn_logs"]
 
@@ -56,8 +58,11 @@ def setup_claude(dry, remove, log):
     if not exe:
         log("Claude Code: CLI `claude` não encontrada — pulei.")
         return False
-    run = (lambda *a: log("$ " + " ".join(a))) if dry else \
-        (lambda *a: subprocess.run(a, capture_output=True, text=True))
+    run = (
+        (lambda *a: log("$ " + " ".join(a)))
+        if dry
+        else (lambda *a: subprocess.run(a, capture_output=True, text=True))
+    )
     run(exe, "mcp", "remove", "-s", "user", SERVER)
     if not remove:
         r = run(exe, "mcp", "add", "-s", "user", SERVER, "--", VPNCTL, "mcp")
@@ -76,11 +81,9 @@ def setup_claude(dry, remove, log):
         data = {}
     allow = data.setdefault("permissions", {}).setdefault("allow", [])
     wanted = [f"mcp__{SERVER}__{t}" for t in READ_ONLY]
-    new = [w for w in allow if w not in wanted] if remove else allow + [w for w in wanted
-                                                                        if w not in allow]
+    new = [w for w in allow if w not in wanted] if remove else allow + [w for w in wanted if w not in allow]
     if new != allow:
-        log(("remover" if remove else "liberar sem prompt") + ": " + ", ".join(wanted)
-            + f" em {settings}")
+        log(("remover" if remove else "liberar sem prompt") + ": " + ", ".join(wanted) + f" em {settings}")
         if not dry:
             backup(settings)
             data["permissions"]["allow"] = new
@@ -106,8 +109,7 @@ def setup_kiro(dry, remove, log):
         changed = servers.pop(SERVER, None) is not None
         log(f"Kiro: remover MCP '{SERVER}' de {path}" if changed else "Kiro: nada a remover")
     else:
-        servers[SERVER] = {"command": VPNCTL, "args": ["mcp"], "disabled": False,
-                           "autoApprove": READ_ONLY}
+        servers[SERVER] = {"command": VPNCTL, "args": ["mcp"], "disabled": False, "autoApprove": READ_ONLY}
         changed = True
         log(f"Kiro: MCP '{SERVER}' em {path} (autoApprove só leitura)")
     if changed and not dry:

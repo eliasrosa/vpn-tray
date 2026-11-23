@@ -5,3 +5,4 @@ __pycache__/
 tests/snapshots/
 *.bak
 *.bak-*
+node_modules/
