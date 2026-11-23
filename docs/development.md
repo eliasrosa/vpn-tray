@@ -79,4 +79,5 @@ Os commits seguem [Conventional Commits](https://www.conventionalcommits.org/), 
   - **CodeQL**;
   - **revisão de dependências** nos PRs.
 - O **Dependabot** atualiza as GitHub Actions (fixadas por SHA) e as ferramentas de release (`package.json`) toda semana.
-- O **release** roda depois do merge e só publica versão quando há commits que a justificam.
+- O **release** roda depois do merge e só publica versão quando há commits que a justificam. Ele grava o `CHANGELOG.md` e o `VERSION` na `main` usando uma **deploy key** deste repositório (secret `RELEASE_DEPLOY_KEY`), que é a única exceção à regra da branch.
+  - **Trocar a chave:** gere outra (`ssh-keygen -t ed25519`), cadastre a pública em *Settings → Deploy keys* com escrita, atualize o secret e apague a antiga.
